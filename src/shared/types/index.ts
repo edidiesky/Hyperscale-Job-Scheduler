@@ -2,7 +2,13 @@ import { Request } from "express";
 import { Types } from "mongoose";
 
 // Job Types
-export type JobStatus = "pending" | "running" | "completed" | "failed" | "dead";
+
+export type JobStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "dead";
 
 export type JobType =
   | "RESERVATION_EXPIRY"
@@ -14,6 +20,10 @@ export type JobType =
 export type JobPriority = 1 | 2 | 3;
 
 // Job Payloads
+// Discriminated union via the `type` field.
+// Each payload carries its own type discriminant so handlers can
+// narrow the type without casting.
+
 export interface ReservationExpiryPayload {
   type: "RESERVATION_EXPIRY";
   sagaId: string;
@@ -67,7 +77,9 @@ export type JobPayload =
   | LowStockAlertPayload
   | ScheduledReportPayload;
 
-// Job Document (mirrors MongoDB schema)
+// Job Document
+// Mirrors the MongoDB schema in domains/job/job.model.ts.
+// version field is the MVCC optimistic lock counter.
 
 export interface IJob {
   _id: Types.ObjectId;
@@ -93,7 +105,6 @@ export interface IJob {
 }
 
 // Dead Letter Document
-
 export interface IDeadLetterError {
   attempt: number;
   error: string;
@@ -115,8 +126,7 @@ export interface IDeadLetter {
   resolution?: string;
 }
 
-// Job Definition (static in-memory config per job type)
-
+// Job Definition
 export interface JobDefinition {
   jobType: JobType;
   maxAttempts: number;
@@ -142,6 +152,9 @@ export interface JobExecutionResult {
 }
 
 // Queue Operations
+// EnqueueJobInput is the internal contract between job.service and
+// the Redis sorted set queue.
+// CreateJobRequest is the external HTTP API contract.
 
 export interface EnqueueJobInput {
   jobId: string;
@@ -174,6 +187,8 @@ export interface LeaderElectionState {
 }
 
 // Retry
+// Passed to retry.service.ts to compute next run time with
+// exponential backoff and jitter.
 
 export interface RetryContext {
   jobId: string;
@@ -186,7 +201,6 @@ export interface RetryContext {
 }
 
 // RabbitMQ Event Payloads
-
 export interface JobCompletedEvent {
   jobId: string;
   jobType: JobType;
@@ -217,6 +231,9 @@ export interface JobDeadEvent {
 }
 
 // HTTP / Express
+// requestId is injected by request-id.middleware.ts before auth runs.
+// Every log entry in every layer must include requestId and userId.
+
 export interface AuthenticatedRequest extends Request {
   user: {
     userId: string;
@@ -237,5 +254,3 @@ export interface PaginatedResult<T> {
   page: number;
   limit: number;
 }
-
-export const SERVICE_NAME = "scheduler-service"

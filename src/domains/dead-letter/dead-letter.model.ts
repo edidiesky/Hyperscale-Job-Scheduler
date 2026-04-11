@@ -54,6 +54,10 @@ export const QUEUE_LOW_STOCK_ALERT = `${QUEUE_KEY_PREFIX}:LOW_STOCK_ALERT`;
 export const QUEUE_SCHEDULED_REPORT = `${QUEUE_KEY_PREFIX}:SCHEDULED_REPORT`;
 
 // Retry and backoff
+// MAX_RETRIES: max execution attempts before a job is moved to dead letter
+// BASE_DELAY_MS: starting delay for exponential backoff
+// MAX_DELAY_MS: ceiling on backoff delay regardless of attempt count
+// RETRY_MULTIPLIER: base of the exponential: delay = BASE * MULTIPLIER^attempt
 
 export const MAX_RETRIES = 5;
 export const BASE_DELAY_MS = 1_000;
