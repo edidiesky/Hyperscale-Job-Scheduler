@@ -1,7 +1,7 @@
 # ADR-SCHED-004: RabbitMQ Quorum Queues on Single Node in Dev
 
 ## Context
-
+ 
 I chose quorum queues over classic mirrored queues for all scheduler
 queues. Quorum queues use the Raft consensus algorithm to replicate
 messages across N nodes before acknowledging a publish. This gives
@@ -52,7 +52,7 @@ Layer 2: MongoDB job records
 ```
 
 RabbitMQ going down in dev means job completion events are lost, not
-jobs themselves. This is acceptable for development and testing.
+jobs themselves. This surely is acceptable for development and testing.
 
 ## Production Requirement
 
@@ -68,7 +68,7 @@ The `rabbitmq.conf` setting:
 quorum_queue.initial_cluster_size = 1
 ```
 
-This must be changed to 3 in production:
+This definitely must be changed to 3 in production:
 
 ```
 quorum_queue.initial_cluster_size = 3

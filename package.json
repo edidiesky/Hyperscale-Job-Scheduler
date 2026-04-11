@@ -7,14 +7,6 @@
     "test": "jest --config jest.config.ts",
     "test:unit":"jest --config jest.config.ts --testPathPattern='/__tests__/unit/'",
     "test:integration":"jest --config jest.integration.config.ts --forceExit",
-    "test:coverage":"jest --config jest.config.ts --coverage",
-    "data:import": "ts-node-dev src/seeder.ts",
-    "Mdas:import": "ts-node-dev src/seeders/Mdas.ts",
-    "Role:import": "ts-node-dev src/seeders/RoleSeeder.ts",
-    "data:migration:test": "ts-node-dev src/scripts/migrations/000_verify_migration.ts",
-    "data:migration2:test": "ts-node-dev src/scripts/migrations/001_add_verified_Login.ts",
-    "data:migration:live": "ts-node-dev src/scripts/migrations/001_add_verified_canLogin.ts",
-    "assignRolesMigration:import": "ts-node-dev src/scripts/assignRolesMigration.ts",
     "test:watch": "jest --watch --coverage"
   },
   "dependencies": {

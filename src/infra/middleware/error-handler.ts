@@ -1,50 +1,95 @@
 import { Request, Response, NextFunction } from "express";
-import { AppError } from "../utils/AppError";
-import logger from "../utils/logger";
+import logger from "../../shared/utils/logger";
+import { AppError } from "../../shared/utils/AppError";
+import { AuthenticatedRequest } from "../../shared/types";
 
-export const errorHandler = (
-  err: any,
+export function NotFound(req: Request, res: Response): void {
+  res.status(404).json({
+    success: false,
+    error: `Route ${req.method} ${req.originalUrl} not found`,
+  });
+}
+
+export function errorHandler(
+  error: Error,
   req: Request,
   res: Response,
-  next: NextFunction
-): void => {
-  let error = err;
-  if (!(error instanceof AppError)) {
-    const statusCode = error.statusCode || 500;
-    const message = error.message || "Internal Server Error";
+  _next: NextFunction
+): void {
+  const requestId = (req as AuthenticatedRequest).requestId;
+  const userId = (req as AuthenticatedRequest).user?.userId;
 
-    error = new AppError(
-      message,
-      statusCode,
-      false, 
-      { originalError: err.message, stack: err.stack }
-    );
-  }
-
-  if (error.isOperational) {
-    logger.warn(`Operational error: ${error.message}`, {
+  if (error instanceof AppError) {
+    logger.warn("app_error", {
+      event: "app_error",
+      requestId,
+      userId,
       statusCode: error.statusCode,
-      path: req.path,
+      message: error.message,
+      path: req.originalUrl,
       method: req.method,
-      details: error.details,
     });
-  } else {
-    logger.error("Unexpected server error", {
+
+    res.status(error.statusCode).json({
+      success: false,
       error: error.message,
-      path: req.path,
-      method: req.method,
     });
+    return;
   }
 
-  res.status(error.statusCode).json({
-    success: false,
-    error: error.message,
-    ...(error.details && { details: error.details }),
-    ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
-  });
-};
+  if (error.name === "ValidationError") {
+    logger.warn("validation_error", {
+      event: "validation_error",
+      requestId,
+      userId,
+      message: error.message,
+      path: req.originalUrl,
+    });
 
-export const NotFound = (req: Request, res: Response, next: NextFunction) => {
-  next(AppError.notFound(`Cannot ${req.method} ${req.originalUrl}`));
-};
-  
+    res.status(400).json({
+      success: false,
+      error: error.message,
+    });
+    return;
+  }
+
+  if (error.name === "MongoServerError" && (error as NodeJS.ErrnoException).code === "11000") {
+    logger.warn("duplicate_key_error", {
+      event: "duplicate_key_error",
+      requestId,
+      userId,
+      message: error.message,
+      path: req.originalUrl,
+    });
+
+    res.status(409).json({
+      success: false,
+      error: "Duplicate key: resource already exists",
+    });
+    return;
+  }
+
+  // JWT errors
+  if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+    res.status(401).json({
+      success: false,
+      error: "Invalid or expired token",
+    });
+    return;
+  }
+
+  logger.error("unhandled_error", {
+    event: "unhandled_error",
+    requestId,
+    userId,
+    message: error.message,
+    stack: error.stack,
+    path: req.originalUrl,
+    method: req.method,
+  });
+
+  res.status(500).json({
+    success: false,
+    error: "Internal server error",
+  });
+}

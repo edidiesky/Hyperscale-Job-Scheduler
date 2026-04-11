@@ -1,36 +1,151 @@
 import Redis from "ioredis";
-import dotenv from "dotenv";
-import logger from "../utils/logger";
+import logger from "../../shared/utils/logger";
+import { SERVICE_NAME } from "../../shared/constants";
 
+const MAX_RETRIES = 10;
+const BASE_RETRY_DELAY_MS = 1_000;
+const MAX_RETRY_DELAY_MS = 30_000;
 
-dotenv.config();
+let redisClient: Redis | null = null;
+let isReady = false;
 
+export function createRedisClient(): Redis {
+  const url = process.env.REDIS_URL;
 
-const IO_REDIS_URL = process.env.IO_REDIS_URL || "redis://localhost:6379";
+  if (!url) {
+    throw new Error("REDIS_URL environment variable is not defined");
+  }
 
+  const client = new Redis(url, {
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    lazyConnect: true,
+    retryStrategy(attempt: number): number | null {
+      if (attempt >= MAX_RETRIES) {
+        logger.error("redis_retry_exhausted", {
+          event: "redis_retry_exhausted",
+          service: SERVICE_NAME,
+          attempt,
+        });
+        return null;
+      }
+      const delay = Math.min(
+        BASE_RETRY_DELAY_MS * Math.pow(2, attempt),
+        MAX_RETRY_DELAY_MS,
+      );
+      const jitter = Math.random() * 500;
+      logger.warn("redis_retry_attempt", {
+        event: "redis_retry_attempt",
+        service: SERVICE_NAME,
+        attempt,
+        delayMs: Math.floor(delay + jitter),
+      });
+      return Math.floor(delay + jitter);
+    },
+  });
 
-if (!IO_REDIS_URL) {
-  logger.error("Error: IO_REDIS_URL is missing and no fallback provided.");
-  process.exit(1);
+  client.on("connect", () => {
+    logger.info("redis_connecting", {
+      event: "redis_connecting",
+      service: SERVICE_NAME,
+    });
+  });
+
+  client.on("ready", () => {
+    isReady = true;
+    logger.info("redis_ready", {
+      event: "redis_ready",
+      service: SERVICE_NAME,
+    });
+  });
+
+  client.on("error", (error: Error) => {
+    isReady = false;
+    logger.error("redis_error", {
+      event: "redis_error",
+      service: SERVICE_NAME,
+      error: error.message,
+    });
+  });
+
+  client.on("close", () => {
+    isReady = false;
+    logger.warn("redis_connection_closed", {
+      event: "redis_connection_closed",
+      service: SERVICE_NAME,
+    });
+  });
+
+  client.on("reconnecting", () => {
+    logger.warn("redis_reconnecting", {
+      event: "redis_reconnecting",
+      service: SERVICE_NAME,
+    });
+  });
+
+  client.on("end", () => {
+    isReady = false;
+    logger.warn("redis_connection_ended", {
+      event: "redis_connection_ended",
+      service: SERVICE_NAME,
+    });
+  });
+
+  return client;
 }
 
-const redisClient = new Redis(IO_REDIS_URL, {
-  retryStrategy(times) {
-    const delay = Math.min(times * 500, 2000);
-    logger.error(`Retrying Redis connection (${times})...`);
-    return delay;
-  },
-  maxRetriesPerRequest: 3,
-});
+export async function connectRedis(): Promise<Redis> {
+  if (redisClient && isReady) {
+    return redisClient;
+  }
 
-// Handling connection errors
-redisClient.on("error", (err) => {
-  logger.error("Redis Client Error:", err.message);
-});
+  redisClient = createRedisClient();
+  await redisClient.connect();
 
-// Log successful connection
-redisClient.on("connect", () => {
-  logger.info("Successfully connected to Redis at", IO_REDIS_URL);
-});
+  let [seconds] = await redisClient.time();
+  logger.info("redis_connected", {
+    event: "redis_connected",
+    service: SERVICE_NAME,
+    redisServerTimeMs: parseInt(String(seconds), 10) * 1000,
+    localTimeMs: Date.now(),
+    clockOffsetMs: Date.now() - parseInt(String(seconds), 10) * 1000,
+  });
 
-export default redisClient;
+  return redisClient;
+}
+
+export async function getRedisClient(): Promise<Redis> {
+  if (!redisClient || !isReady) {
+    return connectRedis();
+  }
+  return redisClient;
+}
+
+export function getRedisClientSync(): Redis {
+  if (!redisClient) {
+    throw new Error("Redis client not initialized. Call connectRedis() first.");
+  }
+  return redisClient;
+}
+
+export function isRedisReady(): boolean {
+  return isReady;
+}
+
+export async function disconnectRedis(): Promise<void> {
+  if (redisClient) {
+    await redisClient.quit();
+    redisClient = null;
+    isReady = false;
+    logger.info("redis_disconnected_gracefully", {
+      event: "redis_disconnected_gracefully",
+      service: SERVICE_NAME,
+    });
+  }
+}
+
+export async function getRedisServerTimeMs(): Promise<number> {
+  const client = await getRedisClient();
+  const [seconds, microseconds] = await client.time();
+  return parseInt(String(seconds), 10) * 1_000 + Math.floor(parseInt(String(microseconds)) / 1_000);
+}

@@ -1,187 +1,107 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import logger from "../utils/logger";
-import { UNAUTHORIZED_STATUS_CODE } from "../constants";
-import { DirectorateType, Permission, RoleLevel } from "../models/User";
-import { roleDataCodeEnum } from "../types";
+import logger from "../../shared/utils/logger";
+import { AuthenticatedRequest } from "../../shared/types";
 
-export const authenticate = async (
+const UNAUTHORIZED = 401;
+
+export async function authenticate(
   req: Request,
   res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  const token = req.cookies.jwt || req.headers.authorization?.split(" ")[1];
+  next: NextFunction
+): Promise<void> {
+  const requestId = (req as AuthenticatedRequest).requestId;
+  const token =
+    req.cookies?.jwt ?? req.headers.authorization?.split(" ")[1];
 
   if (!token) {
-    res
-      .status(UNAUTHORIZED_STATUS_CODE)
-      .json({ error: "Access denied. Please log in to continue." });
+    logger.warn("auth_no_token", {
+      event: "auth_no_token",
+      requestId,
+      ip: req.ip,
+    });
+    res.status(UNAUTHORIZED).json({ error: "Authentication required" });
     return;
   }
 
-  const jwtSecret = process.env.JWT_CODE;
+  const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    res.status(500).json({ error: "Server configuration error." });
+    logger.error("auth_jwt_secret_missing", {
+      event: "auth_jwt_secret_missing",
+      requestId,
+    });
+    res.status(500).json({ error: "Server configuration error" });
     return;
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as {
-      userId: string;
-      userType: string;
-      name: string;
-      roleDataCode?: roleDataCodeEnum;
-      permissions: Permission[];
-      directorates: DirectorateType[];
-      roleLevel?: RoleLevel;
-    };
+    const decoded = (jwt.verify(token, jwtSecret) as AuthenticatedRequest).user;
 
-    // const [permissions, directorates] = await Promise.all([
-    //   PermissionService.getUserPermissions(decoded.userId),
-    //   PermissionService.getUserDirectorates(decoded.userId),
-    // ]);
-
-    req.user = {
+    (req as AuthenticatedRequest).user = {
       userId: decoded.userId,
-      userType: decoded.userType,
+      role: decoded.role,
       name: decoded.name,
-     permissions: decoded.permissions ?? [],
-      directorates: decoded.directorates ?? [],
+      permissions: decoded.permissions ?? [],
       roleLevel: decoded.roleLevel,
-      roleDataCode: decoded.roleDataCode,
     };
 
-    logger.info("User authenticated", {
+    logger.info("auth_success", {
+      event: "auth_success",
+      requestId,
       userId: decoded.userId,
-      userType: decoded.userType,
-      // decoded
-      // permissionCount: permissions.length,
+      role: decoded.role,
     });
 
     next();
   } catch (error) {
-    res
-      .status(UNAUTHORIZED_STATUS_CODE)
-      .json({ error: "Session invalid or expired. Please log in again." });
+    logger.warn("auth_invalid_token", {
+      event: "auth_invalid_token",
+      requestId,
+      ip: req.ip,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(UNAUTHORIZED).json({ error: "Invalid token" });
   }
-};
+}
 
-export const requirePermissions = (requiredPermissions: Permission[]) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
+export function requirePermissions(requiredPermissions: string[]) {
+  return (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): void => {
+    const requestId = req.requestId;
+
     if (!req.user?.permissions) {
-      logger.warn(
-        "Authorization failed: User object missing permissions array",
-        {
-          ip: req.ip,
-          "user-agent": req.headers["user-agent"],
-          userId: req.user?.userId,
-        },
-      );
-      res.status(UNAUTHORIZED_STATUS_CODE).json({
-        error:
-          "You do not have the necessary permissions to access this resource.",
-      });
-      return;
-    }
-
-    const hasPermission = requiredPermissions.every((permission) =>
-      req.user!.permissions.includes(permission),
-    );
-
-    if (!hasPermission) {
-      logger.warn("Authorization failed: Insufficient permissions", {
-        ip: req.ip,
-        "user-agent": req.headers["user-agent"],
-        userId: req.user.userId,
-        requiredPermissions,
-        currentPermissions: req.user.permissions,
-        userObject: req.user,
-      });
-      res.status(UNAUTHORIZED_STATUS_CODE).json({
-        error:
-          "You do not have the necessary permissions to perform this action. Contact your administrator if you believe this is a mistake.",
-      });
-      return;
-    }
-    next();
-  };
-};
-
-export const requireDirectorate = (allowedDirectorates: DirectorateType[]) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user?.directorates) {
-      logger.warn(
-        "Authorization failed: User object missing directorates array",
-        {
-          ip: req.ip,
-          "user-agent": req.headers["user-agent"],
-          userId: req.user?.userId,
-        },
-      );
-      res.status(UNAUTHORIZED_STATUS_CODE).json({
-        error:
-          "You are not assigned to any directorate. Please contact your administrator.",
-      });
-      return;
-    }
-
-    const hasAccess = allowedDirectorates.some((directorate) =>
-      req.user!.directorates.includes(directorate),
-    );
-
-    if (!hasAccess) {
-      logger.warn(
-        "Authorization failed: User directorate not permitted for this resource",
-        {
-          ip: req.ip,
-          "user-agent": req.headers["user-agent"],
-          userId: req.user.userId,
-          requiredDirectorates: allowedDirectorates,
-          currentDirectorates: req.user.directorates,
-        },
-      );
-      res.status(UNAUTHORIZED_STATUS_CODE).json({
-        error:
-          "Your directorate does not have access to this resource. Please, Contact your administrator if you believe this is a mistake.",
-      });
-      return;
-    }
-    next();
-  };
-};
-
-export const requireMinimumRoleLevel = (minimumLevel: RoleLevel) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user?.roleLevel) {
-      logger.warn("Authorization failed: User object missing role level", {
-        ip: req.ip,
-        "user-agent": req.headers["user-agent"],
+      logger.warn("auth_no_permissions", {
+        event: "auth_no_permissions",
+        requestId,
         userId: req.user?.userId,
       });
-      res.status(UNAUTHORIZED_STATUS_CODE).json({
-        error:
-          "Your account has no role assigned. Please contact your administrator.",
+      res.status(UNAUTHORIZED).json({ error: "No permissions" });
+      return;
+    }
+
+    const hasAll = requiredPermissions.every((p) =>
+      req.user!.permissions.includes(p)
+    );
+
+    if (!hasAll) {
+      logger.warn("auth_insufficient_permissions", {
+        event: "auth_insufficient_permissions",
+        requestId,
+        userId: req.user.userId,
+        required: requiredPermissions,
+        current: req.user.permissions,
+      });
+      res.status(UNAUTHORIZED).json({
+        error: "Insufficient permissions",
+        required: requiredPermissions,
+        current: req.user.permissions,
       });
       return;
     }
 
-    if (req.user.roleLevel > minimumLevel) {
-      logger.warn(
-        "Authorization failed: User role level below required threshold",
-        {
-          ip: req.ip,
-          "user-agent": req.headers["user-agent"],
-          userId: req.user.userId,
-          requiredLevel: minimumLevel,
-          currentLevel: req.user.roleLevel,
-        },
-      );
-      res.status(UNAUTHORIZED_STATUS_CODE).json({
-        error:
-          "Your current role does not have sufficient privileges to access this resource. Contact your administrator to request elevated access.",
-      });
-      return;
-    }
     next();
   };
-};
+}
