@@ -5,8 +5,8 @@
     "dev": "ts-node-dev src/server.ts",
     "build": "tsc",
     "test": "jest --config jest.config.ts",
-    "test:unit":"jest --config jest.config.ts --testPathPattern='/__tests__/unit/'",
-    "test:integration":"jest --config jest.integration.config.ts --forceExit",
+    "test:unit": "jest --config jest.config.ts --testPathPattern='/__tests__/unit/'",
+    "test:integration": "jest --config jest.integration.config.ts --forceExit",
     "test:watch": "jest --watch --coverage"
   },
   "dependencies": {
@@ -41,6 +41,7 @@
     "pdfkit": "^0.17.1",
     "prom-client": "^15.1.3",
     "rate-limit-redis": "^4.2.1",
+    "redlock": "^5.0.0-beta.2",
     "sanitize-html": "^2.15.0",
     "save-dev": "^0.0.1-security",
     "swagger-jsdoc": "^6.2.8",
