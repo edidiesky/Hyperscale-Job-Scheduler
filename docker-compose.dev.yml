@@ -7,16 +7,16 @@ volumes:
   redis-data:
   redis-insight-data:
   prom_data:
-  loki_data:
+  # loki_data:
   grafana_data:
   tempo_data:
 
 services:
+
   # Redis
   # Persistence: AOF everysec + RDB snapshot
   # eviction policy: volatile-lru so only keys WITH a TTL are evicted
   # scheduler:queue sorted set members have NO TTL so they are never evicted
-
   redis:
     image: redis:7.2-alpine
     container_name: scheduler_redis
@@ -93,7 +93,6 @@ services:
   # All queues declared durable, all exchanges durable
   # Management UI on 15672
   # Prometheus metrics plugin on 15692
-
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: scheduler_rabbitmq
@@ -105,10 +104,9 @@ services:
       - "15672:15672"
       - "15692:15692"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-scheduler_user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-scheduler_pass}
       RABBITMQ_DEFAULT_VHOST: scheduler
-      # Enable prometheus plugin at boot via enabled_plugins
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
@@ -133,8 +131,8 @@ services:
     container_name: scheduler_rabbitmq_exporter
     environment:
       RABBIT_URL: http://rabbitmq:15672
-      RABBIT_USER: ${RABBITMQ_USER:-guest}
-      RABBIT_PASSWORD: ${RABBITMQ_PASS:-guest}
+      RABBIT_USER: ${RABBITMQ_USER:-scheduler_user}
+      RABBIT_PASSWORD: ${RABBITMQ_PASS:-scheduler_pass}
       RABBIT_VHOST: scheduler
       PUBLISH_PORT: "9419"
     ports:
@@ -147,7 +145,6 @@ services:
         condition: service_healthy
 
   # Scheduler Service
-
   scheduler:
     build:
       context: .
@@ -161,7 +158,7 @@ services:
       PORT: 4017
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/scheduler
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-scheduler_user}:${RABBITMQ_PASS:-scheduler_pass}@rabbitmq:5672/scheduler
       METRICS_PORT: 9464
       LOG_LEVEL: info
       SERVICE_NAME: scheduler-service
@@ -190,7 +187,6 @@ services:
           memory: 256M
 
   # Prometheus
-
   prometheus:
     image: prom/prometheus:latest
     container_name: scheduler_prometheus
@@ -214,14 +210,12 @@ services:
       - rabbitmq-exporter
 
   # Loki
-
   loki:
     image: grafana/loki:2.9.4
     container_name: scheduler_loki
     ports:
       - "3100:3100"
     volumes:
-      - loki_data:/loki
       - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
     command: -config.file=/etc/loki/loki-config.yml
     networks:
@@ -229,7 +223,6 @@ services:
     restart: unless-stopped
 
   # Promtail: scrapes scheduler service logs and ships to Loki
-
   promtail:
     image: grafana/promtail:2.9.4
     container_name: scheduler_promtail
@@ -245,17 +238,17 @@ services:
       - loki
 
   # Tempo: distributed tracing backend (OTEL compatible)
-
   tempo:
     image: grafana/tempo:latest
     container_name: scheduler_tempo
+    user: "10001:10001"
     command: ["-config.file=/etc/tempo/tempo-config.yml"]
     ports:
       - "3200:3200"
       - "4317:4317"
       - "4318:4318"
     volumes:
-      - tempo_data:/tmp/tempo
+      - tempo_data:/var/tempo
       - ./tempo/tempo-config.yml:/etc/tempo/tempo-config.yml:ro
     networks:
       - app-tier
@@ -263,7 +256,6 @@ services:
 
   # Grafana
   # Datasources: Prometheus, Loki, Tempo provisioned automatically
-
   grafana:
     image: grafana/grafana:10.3.1
     container_name: scheduler_grafana

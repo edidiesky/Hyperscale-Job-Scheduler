@@ -94,8 +94,6 @@ const ExecutionSchema = new Schema<IExecution>(
 
 // Primary lookup: all attempts for a given job
 ExecutionSchema.index({ jobId: 1, attempt: 1 });
-
-// Ops query: recent failures across all job types
 ExecutionSchema.index({ status: 1, completedAt: -1 });
 
 // Tenant-scoped execution history

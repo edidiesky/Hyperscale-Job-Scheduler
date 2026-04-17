@@ -124,6 +124,7 @@ export interface IDeadLetter {
   resolvedAt?: Date;
   resolvedBy?: string;
   resolution?: string;
+  expiresAt:Date;
 }
 
 // Job Definition
