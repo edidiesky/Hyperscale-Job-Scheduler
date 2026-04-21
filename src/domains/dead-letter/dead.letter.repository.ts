@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import DeadLetterModel from "./dead-letter.model";
-import OutboxEventModel from "../../models/outbox-event.model";
 import type {
   IDeadLetter,
   IDeadLetterError,

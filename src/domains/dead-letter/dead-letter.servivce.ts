@@ -3,6 +3,7 @@ import logger from "../../shared/utils/logger";
 import { SERVICE_NAME } from "../../shared/constants";
 import type { IJob, IDeadLetter, JobType, PaginatedResult } from "../../shared/types";
 import { deadLetterRepository } from "./dead.letter.repository";
+import OutboxModel from "../../infra/models/OutboxModel";
 
 const OUTBOX_EVENT_TYPE_JOB_DEAD = "job.dead.topic";
 
@@ -32,7 +33,7 @@ class DeadLetterService {
           session
         );
 
-        await OutboxEventModel.create(
+        await OutboxModel.create(
           [
             {
               type: OUTBOX_EVENT_TYPE_JOB_DEAD,
