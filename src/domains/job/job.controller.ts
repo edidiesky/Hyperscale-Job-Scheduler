@@ -8,6 +8,7 @@ import type {
   JobStatus,
   JobType,
 } from "../../shared/types";
+import { SUCCESSFULLY_CREATED_STATUS_CODE, SUCCESSFULLY_FETCHED_STATUS_CODE } from "../../shared/constants";
 
 const CreateJobHandler = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -15,7 +16,7 @@ const CreateJobHandler = asyncHandler(
     const body = req.body as CreateJobRequest;
 
     const job = await jobService.enqueue(body, requestId);
-    res.status(201).json({ success: true, data: job });
+    res.status(SUCCESSFULLY_CREATED_STATUS_CODE).json({ success: true, data: job });
   },
 );
 
@@ -27,7 +28,7 @@ const GetJobHandler = asyncHandler(
     const job = await jobService.findByJobId(jobId);
     if (!job) throw AppError.notFound(`Job ${jobId} not found`);
 
-    res.status(200).json({ success: true, data: job });
+    res.status(SUCCESSFULLY_FETCHED_STATUS_CODE).json({ success: true, data: job });
   },
 );
 
@@ -47,7 +48,7 @@ const ListJobsHandler = asyncHandler(
       Number(limit ?? 20),
     );
 
-    res.status(200).json({ success: true, ...result });
+    res.status(SUCCESSFULLY_FETCHED_STATUS_CODE).json({ success: true, ...result });
   },
 );
 
@@ -60,7 +61,7 @@ const CancelJobHandler = asyncHandler(
     if (!job)
       throw AppError.notFound(`Job ${jobId} not found or already running`);
 
-    res.status(200).json({ success: true, data: job });
+    res.status(SUCCESSFULLY_FETCHED_STATUS_CODE).json({ success: true, data: job });
   },
 );
 
@@ -68,7 +69,7 @@ const JobStatsHandler = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { jobType } = req.query as { jobType?: JobType };
     const counts = await jobService.countByStatus(jobType);
-    res.status(200).json({ success: true, data: counts });
+    res.status(SUCCESSFULLY_FETCHED_STATUS_CODE).json({ success: true, data: counts });
   },
 );
 

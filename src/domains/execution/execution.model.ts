@@ -56,8 +56,6 @@ const ExecutionSchema = new Schema<IExecution>(
       required: true,
       enum: ["completed", "failed"] satisfies JobExecutionStatus[],
     },
-    // instanceId: which scheduler instance ran this attempt
-    // used by watchdog to correlate heartbeats with execution records
     instanceId: {
       type: String,
       required: true,
@@ -87,7 +85,7 @@ const ExecutionSchema = new Schema<IExecution>(
   {
     timestamps: { createdAt: true, updatedAt: false },
     collection: "executions",
-  }
+  },
 );
 
 // Indexes
@@ -106,7 +104,7 @@ ExecutionSchema.index({ jobType: 1, durationMs: -1 });
 // same retention as completed job documents
 ExecutionSchema.index(
   { completedAt: 1 },
-  { expireAfterSeconds: 60 * 60 * 24 * 7 }
+  { expireAfterSeconds: 60 * 60 * 24 * 7 },
 );
 
 export default mongoose.model<IExecution>("Execution", ExecutionSchema);
