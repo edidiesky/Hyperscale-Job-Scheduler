@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import DeadLetterModel from "./dead-letter.model";
+import OutboxEventModel from "../../models/outbox-event.model";
 import type {
   IDeadLetter,
   IDeadLetterError,
@@ -18,7 +20,10 @@ export interface CreateDeadLetterInput {
 }
 
 export interface IDeadLetterRepository {
-  create(input: CreateDeadLetterInput): Promise<IDeadLetter>;
+  create(
+    input: CreateDeadLetterInput,
+    session?: mongoose.ClientSession
+  ): Promise<IDeadLetter>;
   findByJobId(jobId: string): Promise<IDeadLetter | null>;
   findUnresolved(
     tenantId: string | undefined,
@@ -35,12 +40,14 @@ export interface IDeadLetterRepository {
 }
 
 export class DeadLetterRepository implements IDeadLetterRepository {
-  async create(input: CreateDeadLetterInput): Promise<IDeadLetter> {
+  async create(
+    input: CreateDeadLetterInput,
+    session?: mongoose.ClientSession
+  ): Promise<IDeadLetter> {
     try {
-      const doc = await DeadLetterModel.findOneAndUpdate(
-        { jobId: input.jobId },
-        {
-          $setOnInsert: {
+      const [doc] = await DeadLetterModel.create(
+        [
+          {
             jobId: input.jobId,
             jobType: input.jobType,
             tenantId: input.tenantId,
@@ -49,8 +56,8 @@ export class DeadLetterRepository implements IDeadLetterRepository {
             errors: input.errors.slice(0, 10),
             deadAt: new Date(),
           },
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        ],
+        { session }
       );
 
       logger.error("dead_letter_created", {
@@ -62,7 +69,7 @@ export class DeadLetterRepository implements IDeadLetterRepository {
         attempts: input.attempts,
       });
 
-      return doc!;
+      return doc;
     } catch (error) {
       logger.error("dead_letter_create_failed", {
         event: "dead_letter_create_failed",
