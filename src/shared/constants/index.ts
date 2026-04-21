@@ -1,18 +1,16 @@
 
 // Service identity
-
 export const SERVICE_NAME = "scheduler-service";
 export const SCHEDULER_PORT = 4017;
 export const METRICS_PORT = 9464;
 
-// Poll loop
+// Poll loo
 
 export const POLL_INTERVAL_MS = 1_000;
 export const POLL_BATCH_SIZE = 100;
 export const MIN_FREE_SLOTS = 10;
 
 // Leader election
-
 export const LEADER_LOCK_KEY = "scheduler:leader:lock";
 export const LEADER_LOCK_TTL_MS = 30_000;
 export const HEARTBEAT_KEY = "scheduler:leader:heartbeat";
@@ -27,7 +25,6 @@ export const JOB_LOCK_TTL_MS = 300_000;
 export const STALE_RUNNING_JOB_AGE_MS = JOB_LOCK_TTL_MS;
 
 // Redis sorted set queue keys (one per job type)
-
 export const QUEUE_KEY_PREFIX = "scheduler:queue";
 export const QUEUE_RESERVATION_EXPIRY = `${QUEUE_KEY_PREFIX}:RESERVATION_EXPIRY`;
 export const QUEUE_PAYOUT_BATCH = `${QUEUE_KEY_PREFIX}:PAYOUT_BATCH`;
@@ -44,11 +41,9 @@ export const RETRY_MULTIPLIER = 2;
 
 // Executor
 // MAX_CONCURRENT_JOBS: Node.js event l
-
 export const MAX_CONCURRENT_JOBS = 100;
 
 // MongoDB TTLs
-
 export const COMPLETED_JOB_TTL_SECONDS = 60 * 60 * 24 * 7;
 export const DEAD_LETTER_TTL_SECONDS = 60 * 60 * 24 * 30;
 

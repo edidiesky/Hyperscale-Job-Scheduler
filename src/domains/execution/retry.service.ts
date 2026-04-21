@@ -8,9 +8,9 @@ import {
 } from "../../shared/constants";
 import type { IJob } from "../../shared/types";
 import { jobRepository } from "../job/job.repository";
-import { getRedisClientSync } from "@/infra/config/redis";
+import { getRedisClientSync } from "../../infra/config/redis";
 import { RedisJobQueue } from "../scheduler/redis-job-queue";
-import { publishJobFailed, publishJobRetrying } from "@/infra/messaging/rabbitmq-publisher";
+import { publishJobFailed, publishJobRetrying } from "../../infra/messaging/rabbitmq-publisher";
 import { deadLetterService } from "../dead-letter/dead-letter.servivce";
 
 function computeNextRunAt(attempt: number): Date {

@@ -14,7 +14,7 @@ export class OrderAbandonmentHandler implements IJobHandler {
       service: SERVICE_NAME,
       jobId: job.jobId,
       tenantId: job.tenantId,
-      cartId: payload.cartId,
+      orderId: payload.orderId,
       userId: payload.userId,
       stage: payload.stage,
     });
@@ -22,13 +22,13 @@ export class OrderAbandonmentHandler implements IJobHandler {
     if (payload.stage === "REMINDER") {
       await axios.post(
         `${process.env.NOTIFICATION_SERVICE_URL}/internal/notifications/cart-reminder`,
-        { cartId: payload.cartId, userId: payload.userId },
+        { orderId: payload.orderId, userId: payload.userId },
         { headers: { "x-job-id": job.jobId, "x-tenant-id": job.tenantId } }
       );
     } else {
       await axios.post(
-        `${process.env.ORDER_SERVICE_URL}/internal/carts/${payload.cartId}/abandon`,
-        { userId: payload.userId },
+        `${process.env.ORDER_SERVICE_URL}/internal/orders/${payload.orderId}/abandon`,
+        { reason: "Payment not completed within allowed window" },
         { headers: { "x-job-id": job.jobId, "x-tenant-id": job.tenantId } }
       );
     }
@@ -40,7 +40,7 @@ export class OrderAbandonmentHandler implements IJobHandler {
       service: SERVICE_NAME,
       jobId: job.jobId,
       tenantId: job.tenantId,
-      cartId: payload.cartId,
+      orderId: payload.orderId,
       stage: payload.stage,
       durationMs,
     });

@@ -54,7 +54,7 @@ export async function bootstrapServer(): Promise<void> {
 
   const queue = new RedisJobQueue(redis);
 
-  watchdog = new HeartbeatWatchdog();
+  watchdog = new HeartbeatWatchdog(redis);
   watchdog.start();
 
   const executor = new JobExecutor(

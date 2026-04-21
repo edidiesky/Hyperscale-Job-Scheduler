@@ -6,7 +6,6 @@ import {
   STALE_RUNNING_JOB_AGE_MS,
 } from "../../shared/constants";
 import { jobRepository } from "../job/job.repository";
-import { getRedisClientSync } from "../../infra/config/redis";
 
 const JOB_HEARTBEAT_PREFIX = "scheduler:job:heartbeat";
 
@@ -15,8 +14,8 @@ export class HeartbeatWatchdog {
   private running = false;
   private redis: Redis;
 
-  constructor() {
-    this.redis = getRedisClientSync();
+  constructor(redis: Redis) {
+    this.redis = redis;
   }
 
   start(): void {
@@ -87,5 +86,3 @@ export class HeartbeatWatchdog {
     }
   }
 }
-
-export const heartbeatWatchdog = new HeartbeatWatchdog();

@@ -1,22 +1,20 @@
 networks:
   app-tier:
     driver: bridge
+  selleasi-network:
+    external: true
+    name: development_selleasi-network
 
 volumes:
   rabbitmq_data:
   redis-data:
   redis-insight-data:
   prom_data:
-  # loki_data:
   grafana_data:
   tempo_data:
 
 services:
 
-  # Redis
-  # Persistence: AOF everysec + RDB snapshot
-  # eviction policy: volatile-lru so only keys WITH a TTL are evicted
-  # scheduler:queue sorted set members have NO TTL so they are never evicted
   redis:
     image: redis:7.2-alpine
     container_name: scheduler_redis
@@ -87,12 +85,6 @@ services:
       redis:
         condition: service_healthy
 
-  # RabbitMQ
-  # Quorum queues require 3 nodes for true HA.
-  # Single node dev setup: quorum queue with replication factor 1
-  # All queues declared durable, all exchanges durable
-  # Management UI on 15672
-  # Prometheus metrics plugin on 15692
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: scheduler_rabbitmq
@@ -144,7 +136,6 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # Scheduler Service
   scheduler:
     build:
       context: .
@@ -162,8 +153,14 @@ services:
       METRICS_PORT: 9464
       LOG_LEVEL: info
       SERVICE_NAME: scheduler-service
+      INVENTORY_SERVICE_URL: http://inventory:4008
+      ORDER_SERVICE_URL: http://orders:4012
+      PAYMENT_SERVICE_URL: http://payment:4004
+      NOTIFICATION_SERVICE_URL: http://selleasi-notification:4006
+      REPORTING_SERVICE_URL: http://selleasi-stores:4007
     networks:
       - app-tier
+      - selleasi-network
     depends_on:
       redis:
         condition: service_healthy
@@ -186,7 +183,6 @@ services:
         reservations:
           memory: 256M
 
-  # Prometheus
   prometheus:
     image: prom/prometheus:latest
     container_name: scheduler_prometheus
@@ -209,7 +205,6 @@ services:
       - redis-exporter
       - rabbitmq-exporter
 
-  # Loki
   loki:
     image: grafana/loki:2.9.4
     container_name: scheduler_loki
@@ -222,7 +217,6 @@ services:
       - app-tier
     restart: unless-stopped
 
-  # Promtail: scrapes scheduler service logs and ships to Loki
   promtail:
     image: grafana/promtail:2.9.4
     container_name: scheduler_promtail
@@ -237,7 +231,6 @@ services:
     depends_on:
       - loki
 
-  # Tempo: distributed tracing backend (OTEL compatible)
   tempo:
     image: grafana/tempo:latest
     container_name: scheduler_tempo
@@ -254,8 +247,6 @@ services:
       - app-tier
     restart: unless-stopped
 
-  # Grafana
-  # Datasources: Prometheus, Loki, Tempo provisioned automatically
   grafana:
     image: grafana/grafana:10.3.1
     container_name: scheduler_grafana

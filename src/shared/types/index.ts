@@ -20,9 +20,6 @@ export type JobType =
 export type JobPriority = 1 | 2 | 3;
 
 // Job Payloads
-// Discriminated union via the `type` field.
-// Each payload carries its own type discriminant so handlers can
-// narrow the type without casting.
 
 export interface ReservationExpiryPayload {
   type: "RESERVATION_EXPIRY";
@@ -39,9 +36,7 @@ export interface PayoutBatchPayload {
 }
 
 export interface OrderAbandonmentPayload {
-  type: "ORDER_ABANDONMENT";
-  cartId: string;
-  tenantId: string;
+  orderId: string;
   userId: string;
   stage: "REMINDER" | "CANCEL";
 }
