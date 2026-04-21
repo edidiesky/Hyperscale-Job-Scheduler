@@ -5,6 +5,7 @@ import { SERVICE_NAME } from "./shared/constants";
 import { leaderElection, pollLoop, watchdog } from "./bootStrap";
 import { disconnectRabbitMQ } from "./infra/config/rabbitmq.consumer";
 import { disconnectRedis } from "./infra/config/redis";
+import { stopOutboxPoller } from "./shared/utils/outbox-poller";
 
 export function registerShutdownHooks(server: Server): void {
   async function shutdown(signal: string): Promise<void> {
@@ -16,17 +17,15 @@ export function registerShutdownHooks(server: Server): void {
 
     server.close();
 
-    // Stop accepting new jobs
     pollLoop?.stop();
-    // stopOutboxPoller();
+    stopOutboxPoller();
     watchdog?.stop();
+
     if (pollLoop) {
       await pollLoop.drain(30_000);
     }
 
-    // Release leader lock
     await leaderElection?.stop();
-
     await disconnectRabbitMQ();
     await disconnectRedis();
     await mongoose.connection.close();
