@@ -1,3 +1,4 @@
+import type { Redis } from "ioredis";
 import { LeaderElectionService } from "./domains/election/leader-election";
 import { RedlockElection } from "./domains/election/redlock";
 import { JobExecutor } from "./domains/execution/job-executor";
@@ -14,6 +15,7 @@ import { ScheduledReportHandler } from "./domains/workers/scheduled-report.handl
 import { connectMongoDB } from "./infra/config/database";
 import { connectRabbitMQ } from "./infra/config/rabbitmq.consumer";
 import { connectRedis } from "./infra/config/redis";
+import { startOutboxPoller } from "./shared/utils/outbox-poller";
 import { SERVICE_NAME, STALE_RUNNING_JOB_AGE_MS } from "./shared/constants";
 import logger from "./shared/utils/logger";
 
@@ -21,29 +23,67 @@ export let pollLoop: PollLoop | null = null;
 export let leaderElection: LeaderElectionService | null = null;
 export let watchdog: HeartbeatWatchdog | null = null;
 
+interface InitStep {
+  name: string;
+  fn: () => Promise<void>;
+}
+
+async function runStep(step: InitStep): Promise<void> {
+  const start = process.hrtime.bigint();
+  try {
+    await step.fn();
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    logger.info("bootstrap_step_complete", {
+      event: "bootstrap_step_complete",
+      service: SERVICE_NAME,
+      step: step.name,
+      durationMs: ms.toFixed(2),
+    });
+  } catch (error) {
+    logger.error("bootstrap_step_failed", {
+      event: "bootstrap_step_failed",
+      service: SERVICE_NAME,
+      step: step.name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
 export async function bootstrapServer(): Promise<void> {
-  const start = Date.now();
+  const start = process.hrtime.bigint();
 
   const mongoUrl = process.env.DATABASE_URL;
   if (!mongoUrl) throw new Error("DATABASE_URL is not defined");
 
-  await connectMongoDB(mongoUrl);
-  logger.info("bootstrap_mongodb_ready", {
-    event: "bootstrap_mongodb_ready",
-    service: SERVICE_NAME,
-  });
+  let redis: Redis;
 
-  const redis = await connectRedis();
-  logger.info("bootstrap_redis_ready", {
-    event: "bootstrap_redis_ready",
-    service: SERVICE_NAME,
-  });
+  const infrastructureSteps: InitStep[] = [
+    {
+      name: "mongodb",
+      fn: () => connectMongoDB(mongoUrl),
+    },
+    {
+      name: "redis",
+      fn: async () => {
+        redis = await connectRedis();
+      },
+    },
+    {
+      name: "rabbitmq",
+      fn: () => connectRabbitMQ(),
+    },
+    {
+      name: "outbox_poller",
+      fn: async () => {
+        startOutboxPoller();
+      },
+    },
+  ];
 
-  await connectRabbitMQ();
-  logger.info("bootstrap_rabbitmq_ready", {
-    event: "bootstrap_rabbitmq_ready",
-    service: SERVICE_NAME,
-  });
+  for (const step of infrastructureSteps) {
+    await runStep(step);
+  }
 
   const staleCount = await jobRepository.resetStaleJobs(STALE_RUNNING_JOB_AGE_MS);
   logger.info("bootstrap_stale_jobs_reset", {
@@ -52,9 +92,9 @@ export async function bootstrapServer(): Promise<void> {
     count: staleCount,
   });
 
-  const queue = new RedisJobQueue(redis);
+  const queue = new RedisJobQueue(redis!);
 
-  watchdog = new HeartbeatWatchdog(redis);
+  watchdog = new HeartbeatWatchdog(redis!);
   watchdog.start();
 
   const executor = new JobExecutor(
@@ -74,8 +114,8 @@ export async function bootstrapServer(): Promise<void> {
     worker.dispatch(jobIds, jobType),
   );
 
-  const redlock = new RedlockElection(redis);
-  leaderElection = new LeaderElectionService(redis, redlock);
+  const redlock = new RedlockElection(redis!);
+  leaderElection = new LeaderElectionService(redis!, redlock);
 
   leaderElection.start({
     onPromoted: () => {
@@ -94,9 +134,11 @@ export async function bootstrapServer(): Promise<void> {
     },
   });
 
+  const totalMs = Number(process.hrtime.bigint() - start) / 1e6;
   logger.info("bootstrap_complete", {
     event: "bootstrap_complete",
     service: SERVICE_NAME,
-    durationMs: Date.now() - start,
+    durationMs: totalMs.toFixed(2),
+    steps: infrastructureSteps.length,
   });
 }
